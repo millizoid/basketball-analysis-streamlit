@@ -23,7 +23,7 @@ st.markdown(
     "and let you download both a CSV and a nicely formatted HTML summary."
 )
 
-default_url = "https://basketball.usbasket.com/player/Martavian-Payne/330331"
+default_url = "https://basketball.usbasket.com/player/LeBron-James/52424"
 url = st.text_input("Player URL", value=default_url)
 
 if st.button("Analyze player"):
