@@ -1,12 +1,19 @@
 import re
 import urllib.request
-from urllib.parse import quote_plus, urlparse, parse_qs, unquote
+from urllib.parse import (
+    quote_plus,
+    urlparse,
+    parse_qs,
+    unquote,
+    urlencode,   # needed for POST form encoding
+)
+from urllib.error import HTTPError, URLError
 from typing import Optional, Dict, Any
+
 import numpy as np
 import pandas as pd
 from bs4 import BeautifulSoup
 from datetime import datetime
-from urllib.error import HTTPError, URLError
 
 
 # ============================================================
