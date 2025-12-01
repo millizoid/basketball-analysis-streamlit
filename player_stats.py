@@ -1,11 +1,12 @@
 import re
 import urllib.request
+from urllib.parse import quote_plus, urlparse, parse_qs, unquote
 from typing import Optional, Dict, Any
-
 import numpy as np
 import pandas as pd
 from bs4 import BeautifulSoup
 from datetime import datetime
+from urllib.error import HTTPError, URLError
 
 
 # ============================================================
@@ -125,6 +126,98 @@ def scrape_player_game_log(url: str) -> pd.DataFrame:
     df = pd.DataFrame(data_rows, columns=header)
     return df
 
+USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/122.0 Safari/537.36"
+)
+
+def _extract_usbasket_from_player_url(candidate: str) -> Optional[str]:
+    """
+    Given a Eurobasket or USBasket player URL, normalize it to the canonical
+    USBasket form:
+
+        https://basketball.usbasket.com/player/Slug/ID
+
+    Examples:
+        https://basketball.eurobasket.com/player/LeBron-James/NBA/Cleveland-Cavaliers/52424
+        https://basketball.usbasket.com/player/Martavian-Payne/330331
+    """
+    candidate = candidate.split("?", 1)[0]  # drop query params
+    parsed = urlparse(candidate)
+
+    path_parts = parsed.path.strip("/").split("/")
+    # We expect something like: ["player", "Slug", "...", "ID"]
+    if len(path_parts) < 3 or path_parts[0].lower() != "player":
+        return None
+
+    slug = path_parts[1]
+    player_id = path_parts[-1]
+
+    if not player_id.isdigit():
+        return None
+
+    return f"https://basketball.usbasket.com/player/{slug}/{player_id}"
+
+
+
+USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/127.0.0.0 Safari/537.36"
+)
+
+SEARCH_URL = "https://www.eurobasket.com/basketball-search.aspx"
+
+
+def find_usbasket_player_url_by_name(name: str) -> Optional[str]:
+    """
+    Use Eurobasket's basketball-search.aspx endpoint to look up a player.
+    The endpoint responds with a 302 redirect to the full USbasket player URL,
+    e.g. https://basketball.usbasket.com/player/LeBron-James/52424
+    """
+    name = name.strip()
+    if not name:
+        return None
+
+    # 🔴 IMPORTANT: change these keys to match the "Form Data" you see in DevTools
+    # Example ONLY – replace 'txtSearch' and 'SearchType' with the real names:
+    form_data = {
+        "txtSearch": name,      # <-- whatever field holds "LeBron James"
+        "SearchType": "Player" # <-- if there is a type/section field; otherwise remove
+    }
+
+    encoded = urllib.parse.urlencode(form_data).encode("utf-8")
+
+    req = urllib.request.Request(
+        SEARCH_URL,
+        data=encoded,  # POST body
+        headers={
+            "User-Agent": USER_AGENT,
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Origin": "https://basketball.usbasket.com",
+            "Referer": "https://basketball.usbasket.com/",
+        },
+        method="POST",
+    )
+
+    try:
+        # urlopen will follow the 302 by default
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            final_url = resp.geturl()
+    except (HTTPError, URLError) as e:
+        print("Error hitting basketball-search.aspx:", e)
+        return None
+    except Exception as e:
+        print("Unexpected error:", e)
+        return None
+
+    # We expect something like: https://basketball.usbasket.com/player/Name/ID
+    if "basketball.usbasket.com/player/" in final_url:
+        final_url = final_url.split("?", 1)[0].split("#", 1)[0]
+        return final_url
+
+    return None
 
 # ============================================================
 # Advanced stats helpers
